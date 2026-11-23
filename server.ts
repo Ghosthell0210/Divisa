@@ -159,7 +159,7 @@ async function bootstrap(): Promise<void> {
   });
 
   // Initialize Telegram Bot (Polling or Webhook when TELEGRAM_BOT_TOKEN is set)
-  await initTelegramBot(app);
+  initTelegramBot(app);
 
   // Serve Vite middleware in dev OR static dist/ in production (Altare)
   const distDir = path.resolve(process.cwd(), 'dist');
@@ -170,8 +170,12 @@ async function bootstrap(): Promise<void> {
 
   if (isProd && fs.existsSync(distIndex)) {
     app.use(express.static(distDir));
-    app.get('/{*splat}', (_req, res) => {
-      res.sendFile(distIndex);
+    app.use((req, res, next) => {
+      if (req.method === 'GET' && !req.path.startsWith('/api/')) {
+        res.sendFile(distIndex);
+        return;
+      }
+      next();
     });
   } else {
     const { createServer: createViteServer } = await import('vite');

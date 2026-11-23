@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 import {
   BarChart3,
   Bot,
@@ -11,10 +11,15 @@ import {
 } from 'lucide-react';
 import type { MarketSnapshot } from './types/market';
 import { OverviewPanel } from './components/OverviewPanel';
-import { ChartsPanel } from './components/ChartsPanel';
 import { TelegramSimulator } from './components/TelegramSimulator';
 import { RemittancesPanel } from './components/RemittancesPanel';
-import { AdminAltarePanel } from './components/AdminAltarePanel';
+
+const ChartsPanel = lazy(() =>
+  import('./components/ChartsPanel').then((m) => ({ default: m.ChartsPanel }))
+);
+const AdminAltarePanel = lazy(() =>
+  import('./components/AdminAltarePanel').then((m) => ({ default: m.AdminAltarePanel }))
+);
 
 type NavTab = 'overview' | 'charts' | 'simulator' | 'remittances' | 'admin';
 
@@ -225,25 +230,31 @@ export default function App() {
             </div>
           )}
 
-          {activeTab === 'overview' && (
-            <OverviewPanel
-              snapshot={snapshot}
-              loading={loading}
-              onSelectAssetForChart={handleSelectAssetForChart}
-            />
-          )}
-          {activeTab === 'charts' && (
-            <ChartsPanel
-              snapshot={snapshot}
-              selectedSymbol={chartSymbol}
-              onSelectSymbol={setChartSymbol}
-            />
-          )}
-          {activeTab === 'simulator' && <TelegramSimulator />}
-          {activeTab === 'remittances' && <RemittancesPanel />}
-          {activeTab === 'admin' && (
-            <AdminAltarePanel snapshot={snapshot} onRatesUpdated={() => void fetchRates(false)} />
-          )}
+          <Suspense
+            fallback={
+              <div className="h-72 bg-[#111827] border border-slate-800 rounded-xl animate-pulse" />
+            }
+          >
+            {activeTab === 'overview' && (
+              <OverviewPanel
+                snapshot={snapshot}
+                loading={loading}
+                onSelectAssetForChart={handleSelectAssetForChart}
+              />
+            )}
+            {activeTab === 'charts' && (
+              <ChartsPanel
+                snapshot={snapshot}
+                selectedSymbol={chartSymbol}
+                onSelectSymbol={setChartSymbol}
+              />
+            )}
+            {activeTab === 'simulator' && <TelegramSimulator />}
+            {activeTab === 'remittances' && <RemittancesPanel />}
+            {activeTab === 'admin' && (
+              <AdminAltarePanel snapshot={snapshot} onRatesUpdated={() => void fetchRates(false)} />
+            )}
+          </Suspense>
         </main>
       </div>
     </div>

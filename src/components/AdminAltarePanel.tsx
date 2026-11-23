@@ -259,20 +259,20 @@ export const AdminAltarePanel: React.FC<AdminAltarePanelProps> = ({ snapshot, on
             {
               id: 'build',
               title: '1. Comando de Compilación',
-              value: 'npm install && npm run build',
-              note: 'Compila el panel web en dist/ sin requerir compilación separada del servidor.',
+              value: 'bun install && bun run build',
+              note: 'También compatible con npm run build. Compila la interfaz en dist/ sin advertencias.',
             },
             {
               id: 'start',
               title: '2. Startup Command (Altare)',
-              value: 'npm start',
-              note: 'Ejecuta node server.ts directamente en el puerto asignado (PORT).',
+              value: 'bun server.ts',
+              note: 'Usa bun server.ts en contenedores Bun de Altare, o npm start (node server.ts) en Node 22+.',
             },
             {
               id: 'health',
               title: '3. Endpoint de Monitoreo',
               value: '/api/health',
-              note: 'Devuelve HTTP 200 con uptime, uso de RAM y estado de conexión a Telegram.',
+              note: 'Responde al instante tras arrancar con uptime, RAM y estado de conexión a Telegram.',
             },
           ].map((step) => (
             <div key={step.id} className="bg-[#0B1120] border border-slate-800 rounded-lg p-4">

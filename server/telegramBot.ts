@@ -206,7 +206,7 @@ function toTelegrafMarkup(buttons: BotInlineButton[][]) {
   );
 }
 
-export async function initTelegramBot(app: Express): Promise<void> {
+export function initTelegramBot(app: Express): void {
   const token = process.env.TELEGRAM_BOT_TOKEN?.trim();
   if (!token) {
     runtimeStatus.mode = 'standby';
@@ -245,29 +245,40 @@ export async function initTelegramBot(app: Express): Promise<void> {
 
   const webhookUrl = process.env.WEBHOOK_URL?.trim();
 
-  try {
-    const me = await bot.telegram.getMe();
-    runtimeStatus.botUsername = me.username ? `@${me.username}` : null;
-
-    if (webhookUrl) {
+  // Mount webhook middleware synchronously before SPA fallback if configured
+  if (webhookUrl) {
+    try {
       const parsed = new URL(webhookUrl);
       const webhookPath = parsed.pathname || '/api/telegram/webhook';
       app.use(bot.webhookCallback(webhookPath));
-      await bot.telegram.setWebhook(webhookUrl);
-      runtimeStatus.mode = 'webhook';
-      console.log(`[TelegramBot] Webhook activo en ${webhookUrl} como ${runtimeStatus.botUsername ?? 'bot'}`);
-    } else {
-      await bot.telegram.deleteWebhook({ drop_pending_updates: true });
-      void bot.launch();
-      runtimeStatus.mode = 'polling';
-      console.log(`[TelegramBot] Long-polling activo en Altare como ${runtimeStatus.botUsername ?? 'bot'}`);
+    } catch (err) {
+      runtimeStatus.lastError = `WEBHOOK_URL inválida: ${err instanceof Error ? err.message : 'URL inválida'}`;
     }
-    runtimeStatus.lastError = null;
-  } catch (err) {
-    runtimeStatus.mode = 'standby';
-    runtimeStatus.lastError = err instanceof Error ? err.message : 'Error conectando con Telegram API';
-    console.error('[TelegramBot] Error al iniciar:', runtimeStatus.lastError);
   }
+
+  // Connect to Telegram asynchronously so Express /api/health boots immediately
+  void (async () => {
+    try {
+      const me = await bot.telegram.getMe();
+      runtimeStatus.botUsername = me.username ? `@${me.username}` : null;
+
+      if (webhookUrl) {
+        await bot.telegram.setWebhook(webhookUrl);
+        runtimeStatus.mode = 'webhook';
+        console.log(`[TelegramBot] Webhook activo en ${webhookUrl} como ${runtimeStatus.botUsername ?? 'bot'}`);
+      } else {
+        await bot.telegram.deleteWebhook({ drop_pending_updates: true });
+        void bot.launch();
+        runtimeStatus.mode = 'polling';
+        console.log(`[TelegramBot] Long-polling activo en Altare como ${runtimeStatus.botUsername ?? 'bot'}`);
+      }
+      runtimeStatus.lastError = null;
+    } catch (err) {
+      runtimeStatus.mode = 'standby';
+      runtimeStatus.lastError = err instanceof Error ? err.message : 'Error conectando con Telegram API';
+      console.error('[TelegramBot] Error al iniciar:', runtimeStatus.lastError);
+    }
+  })();
 }
 
 export function getBotRuntimeStatus(): BotRuntimeStatus {
