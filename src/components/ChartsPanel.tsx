@@ -26,6 +26,7 @@ const CHART_ASSETS = [
   { symbol: 'USD', label: 'USD / CUP', group: 'Divisas' },
   { symbol: 'EUR', label: 'EUR / CUP', group: 'Divisas' },
   { symbol: 'MLC', label: 'MLC / CUP', group: 'Divisas' },
+  { symbol: 'USDT_TRC20', label: 'USDT Cuba / CUP', group: 'Divisas' },
   { symbol: 'ZELLE', label: 'ZELLE / CUP', group: 'Divisas' },
 ];
 
@@ -66,7 +67,7 @@ export const ChartsPanel: React.FC<ChartsPanelProps> = ({
   const isFiat = useMemo(
     () =>
       snapshot?.fiatRates.some((f) => f.code === selectedSymbol) ??
-      ['USD', 'EUR', 'MLC', 'ZELLE', 'CAD', 'MXN', 'CLASICA'].includes(selectedSymbol),
+      ['USD', 'EUR', 'MLC', 'USDT_TRC20', 'ZELLE', 'CAD', 'MXN', 'CLASICA'].includes(selectedSymbol),
     [snapshot, selectedSymbol]
   );
 

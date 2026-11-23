@@ -8,7 +8,7 @@ interface AdminAltarePanelProps {
   onRatesUpdated: () => void;
 }
 
-const OVERRIDE_CODES = ['USD', 'EUR', 'MLC', 'ZELLE', 'CLASICA'] as const;
+const OVERRIDE_CODES = ['USD', 'EUR', 'MLC', 'USDT_TRC20', 'ZELLE', 'CLASICA'] as const;
 
 export const AdminAltarePanel: React.FC<AdminAltarePanelProps> = ({ snapshot, onRatesUpdated }) => {
   const [stats, setStats] = useState<BotStats | null>(null);

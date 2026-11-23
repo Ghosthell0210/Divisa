@@ -18,9 +18,10 @@ interface OverviewPanelProps {
 }
 
 const SYMBOL_LABELS: Record<string, string> = {
-  USD: 'USD — Dólar EE.UU.',
+  USD: 'USD — Dólar Efectivo',
   EUR: 'EUR — Euro',
   MLC: 'MLC — Moneda Libremente Convertible',
+  USDT_TRC20: 'USDT_TRC20 — USDT en Cuba (TRMCC)',
   ZELLE: 'ZELLE — Saldo Zelle USD',
   CLASICA: 'CLASICA — Tarjeta Clásica',
   CAD: 'CAD — Dólar Canadiense',
@@ -28,7 +29,7 @@ const SYMBOL_LABELS: Record<string, string> = {
   CUP: 'CUP — Peso Cubano',
   BTC: 'BTC — Bitcoin',
   ETH: 'ETH — Ethereum',
-  USDT: 'USDT — Tether',
+  USDT: 'USDT — Tether Spot',
   SOL: 'SOL — Solana',
   BNB: 'BNB — BNB',
   TON: 'TON — Toncoin',
@@ -79,13 +80,16 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
     if (!Number.isFinite(amount) || amount < 0) return null;
 
     const usdRate = snapshot.fiatRates.find((f) => f.code === 'USD')?.rateToCup ?? null;
+    const usdtTrc20Rate = snapshot.fiatRates.find((f) => f.code === 'USDT_TRC20')?.rateToCup ?? null;
 
     const toCup = (sym: string): number | null => {
       if (sym === 'CUP') return 1;
+      if (sym === 'USDT' && usdtTrc20Rate !== null) return usdtTrc20Rate;
       const fiat = snapshot.fiatRates.find((f) => f.code === sym);
       if (fiat) return fiat.rateToCup;
       const crypto = snapshot.cryptoAssets.find((c) => c.symbol === sym);
-      if (crypto && usdRate) return crypto.priceUsd * usdRate;
+      const cryptoCupBase = usdtTrc20Rate ?? usdRate;
+      if (crypto && cryptoCupBase) return crypto.priceUsd * cryptoCupBase;
       return null;
     };
 

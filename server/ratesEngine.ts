@@ -56,9 +56,10 @@ const DATA_DIR = path.resolve(process.cwd(), '.data');
 const STATE_FILE = path.join(DATA_DIR, 'bot-state.json');
 
 const FIAT_NAMES: Record<FiatRate['code'], string> = {
-  USD: 'Dólar Estadounidense',
+  USD: 'Dólar Efectivo',
   EUR: 'Euro',
   MLC: 'Moneda Libremente Convertible',
+  USDT_TRC20: 'USDT TRC20 (Mercado Cuba)',
   ZELLE: 'Saldo Zelle USD',
   CAD: 'Dólar Canadiense',
   MXN: 'Peso Mexicano',
@@ -235,8 +236,9 @@ function parseElToqueTasasObject(raw: Record<string, unknown>): StoredFiatItem[]
   const results: StoredFiatItem[] = [];
   const mapping: Array<{ keys: string[]; code: FiatRate['code'] }> = [
     { keys: ['USD', 'usd'], code: 'USD' },
-    { keys: ['EUR', 'eur'], code: 'EUR' },
+    { keys: ['EUR', 'eur', 'ECU', 'ecu'], code: 'EUR' },
     { keys: ['MLC', 'mlc'], code: 'MLC' },
+    { keys: ['USDT_TRC20', 'usdt_trc20', 'USDT', 'usdt'], code: 'USDT_TRC20' },
     { keys: ['ZELLE', 'zelle', 'Zelle'], code: 'ZELLE' },
     { keys: ['CAD', 'cad'], code: 'CAD' },
     { keys: ['MXN', 'mxn'], code: 'MXN' },
@@ -279,13 +281,16 @@ async function fetchElToqueViaSearchGrounding(): Promise<{
   });
 
   const todayStr = new Date().toISOString().slice(0, 10);
-  const prompt = `Busca en Google la tasa representativa del mercado informal de divisas en Cuba publicada hoy (${todayStr}) por elTOQUE (eltoque.com/tasas-de-cambio-de-moneda-en-cuba-hoy).
-Extrae únicamente los valores numéricos reales actuales en CUP (Pesos Cubanos) publicados por elTOQUE para USD, EUR, MLC, ZELLE, CAD, MXN y CLASICA. Si alguno no aparece explícitamente en los resultados de búsqueda, devuelve null para ese campo. NO inventes ni estimes cifras.
-Devuelve SOLO un bloque JSON válido con este formato exacto:
+  const prompt = `Busca en Google las tasas vigentes HOY (${todayStr}) en el mercado informal de Cuba publicadas por elTOQUE (TRMI y TRMCC para criptomonedas):
+1. Divisas: USD efectivo, EUR, MLC, ZELLE, CAD, MXN, Tarjeta CLASICA en CUP.
+2. Criptomonedas en Cuba (TRMCC / elTOQUE / P2P Cuba): precio actual de 1 USDT (TRC20) en CUP (suele cotizarse más caro que el USD en efectivo).
+Extrae únicamente valores numéricos reales encontrados en los resultados de búsqueda. Si alguno no aparece, devuelve null. NO inventes ni estimes cifras.
+Devuelve SOLO un JSON válido con este formato exacto:
 {
   "USD": number | null,
   "EUR": number | null,
   "MLC": number | null,
+  "USDT_TRC20": number | null,
   "ZELLE": number | null,
   "CAD": number | null,
   "MXN": number | null,
@@ -397,6 +402,8 @@ async function fetchRealElToqueRates(): Promise<{
   }
 
   // 2. Official elTOQUE public Telegram channel web preview (no Cloudflare, real daily TRMI)
+  let channelRates: StoredFiatItem[] = [];
+  let channelUrls: SourceLink[] = [];
   try {
     const res = await fetchWithTimeout('https://t.me/s/eltoquecom', {}, 5500);
     if (res.ok) {
@@ -406,7 +413,7 @@ async function fetchRealElToqueRates(): Promise<{
         const latest = posts[posts.length - 1];
         const previous = posts.length >= 2 ? posts[posts.length - 2] : null;
 
-        const ratesWithChange = latest.rates.map((item) => {
+        channelRates = latest.rates.map((item) => {
           const prevItem = previous?.rates.find((p) => p.code === item.code);
           const change24h =
             prevItem && prevItem.rateToCup > 0
@@ -429,18 +436,44 @@ async function fetchRealElToqueRates(): Promise<{
           }
         }
 
-        const nowIso = new Date().toISOString();
-        const urls = [
+        channelUrls = [
           { title: 'Canal Oficial elTOQUE', uri: 'https://t.me/s/eltoquecom' },
           { title: 'elTOQUE Tasas', uri: 'https://eltoque.com/tasas-de-cambio-de-moneda-en-cuba-hoy' },
         ];
-        state.lastRealFiat = { fetchedAt: nowIso, source: 'live', sourceUrls: urls, rates: ratesWithChange };
-        persistState();
-        return { rates: ratesWithChange, source: 'live', sourceUrls: urls, error: null };
       }
     }
   } catch {
     // Continue to direct HTML & Search Grounding
+  }
+
+  // Enrich with USDT_TRC20 (TRMCC), Zelle, Clasica via Google Search Grounding if missing from Telegram caption
+  if (channelRates.length > 0) {
+    const hasUsdtTrc20 = channelRates.some((r) => r.code === 'USDT_TRC20');
+    if (!hasUsdtTrc20) {
+      try {
+        const grounded = await fetchElToqueViaSearchGrounding();
+        if (grounded && grounded.rates.length > 0) {
+          const existingCodes = new Set(channelRates.map((r) => r.code));
+          for (const gItem of grounded.rates) {
+            if (!existingCodes.has(gItem.code)) {
+              channelRates.push(gItem);
+              appendFiatHistory([gItem], new Date().toISOString());
+            }
+          }
+          for (const u of grounded.sourceUrls) {
+            if (!channelUrls.some((c) => c.uri === u.uri)) {
+              channelUrls.push(u);
+            }
+          }
+        }
+      } catch {
+        // Channel rates remain valid even if enrichment fails
+      }
+    }
+    const nowIso = new Date().toISOString();
+    state.lastRealFiat = { fetchedAt: nowIso, source: 'live', sourceUrls: channelUrls.slice(0, 4), rates: channelRates };
+    persistState();
+    return { rates: channelRates, source: 'live', sourceUrls: channelUrls.slice(0, 4), error: null };
   }
 
   // 3. Direct HTML/JSON extraction from eltoque.com
@@ -699,13 +732,23 @@ export async function getMarketSnapshot(forceRefresh = false): Promise<MarketSna
   }
 
   const usdToCup = fiatRates.find((f) => f.code === 'USD')?.rateToCup ?? null;
+  const usdtCup = fiatRates.find((f) => f.code === 'USDT_TRC20')?.rateToCup ?? null;
+
   const cryptoAssets: CryptoAsset[] = cryptoCache.data.map((item) => {
     const meta = CRYPTO_META.find((m) => m.symbol === item.symbol)!;
+    // In Cuba, USDT and crypto convert via the real USDT_TRC20 P2P rate when available
+    const cupMultiplier = usdtCup ?? usdToCup;
+    const priceCup =
+      item.symbol === 'USDT'
+        ? usdtCup
+        : cupMultiplier !== null
+          ? Number((item.priceUsd * cupMultiplier).toFixed(2))
+          : null;
     return {
       symbol: item.symbol,
       name: meta.name,
       priceUsd: item.priceUsd,
-      priceCup: usdToCup !== null ? Number((item.priceUsd * usdToCup).toFixed(2)) : null,
+      priceCup,
       change24h: item.change24h,
       volume24hUsd: item.volume24hUsd,
       marketCapUsd: item.marketCapUsd,
@@ -885,6 +928,7 @@ export async function convertCurrencies(
   const to = toSymbol.toUpperCase();
 
   const usdToCup = snapshot.fiatRates.find((f) => f.code === 'USD')?.rateToCup ?? null;
+  const usdtTrc20Cup = snapshot.fiatRates.find((f) => f.code === 'USDT_TRC20')?.rateToCup ?? null;
 
   const getValueInUsd = (sym: string): number | null => {
     if (sym === 'USD') return 1;
@@ -896,13 +940,15 @@ export async function convertCurrencies(
     return null;
   };
 
-  // Direct CUP-to-Fiat conversion even if USD itself isn't in fiatRates
+  // Direct CUP-to-Fiat / Cuban USDT_TRC20 conversion
   const getValueInCup = (sym: string): number | null => {
     if (sym === 'CUP') return 1;
+    if (sym === 'USDT' && usdtTrc20Cup !== null) return usdtTrc20Cup;
     const fiat = snapshot.fiatRates.find((f) => f.code === sym);
     if (fiat) return fiat.rateToCup;
     const crypto = snapshot.cryptoAssets.find((c) => c.symbol === sym);
-    if (crypto && usdToCup) return crypto.priceUsd * usdToCup;
+    const cryptoBaseCup = usdtTrc20Cup ?? usdToCup;
+    if (crypto && cryptoBaseCup) return crypto.priceUsd * cryptoBaseCup;
     return null;
   };
 
@@ -953,14 +999,17 @@ export async function calculateRemittances(amountUsd: number): Promise<{
 }> {
   const snapshot = await getMarketSnapshot(false);
   const usdToCup = snapshot.fiatRates.find((f) => f.code === 'USD')?.rateToCup ?? null;
+  const usdtTrc20Cup = snapshot.fiatRates.find((f) => f.code === 'USDT_TRC20')?.rateToCup ?? null;
   const mlcToCup = snapshot.fiatRates.find((f) => f.code === 'MLC')?.rateToCup ?? null;
 
-  if (!usdToCup) {
+  if (!usdToCup && !usdtTrc20Cup) {
     return {
       error: snapshot.elToqueError ?? 'No hay tasa real USD/CUP disponible en este momento para calcular entregas en CUP.',
       quotes: [],
     };
   }
+
+  const baseUsdCup = usdToCup ?? usdtTrc20Cup ?? 1;
 
   const quotes = state.gateways
     .filter((g) => g.enabled)
@@ -971,16 +1020,18 @@ export async function calculateRemittances(amountUsd: number): Promise<{
       let effectiveCupRate = 0;
 
       if (gw.payoutCurrency === 'CUP') {
-        const appliedRate = Math.max(1, usdToCup - gw.spreadCup);
+        // Binance Pay / USDT TRC20 uses the real Cuban USDT_TRC20 CUP market rate when available
+        const refRate = gw.id === 'binance-pay' && usdtTrc20Cup ? usdtTrc20Cup : baseUsdCup;
+        const appliedRate = Math.max(1, refRate - gw.spreadCup);
         deliveredAmount = Math.round(netUsd * appliedRate);
         effectiveCupRate = amountUsd > 0 ? Number((deliveredAmount / amountUsd).toFixed(2)) : 0;
       } else if (gw.payoutCurrency === 'MLC' && mlcToCup) {
-        const mlcPerUsd = usdToCup / mlcToCup;
+        const mlcPerUsd = baseUsdCup / mlcToCup;
         deliveredAmount = Number((netUsd * mlcPerUsd).toFixed(2));
         effectiveCupRate = amountUsd > 0 ? Number(((deliveredAmount * mlcToCup) / amountUsd).toFixed(2)) : 0;
       } else {
         deliveredAmount = Number(netUsd.toFixed(2));
-        effectiveCupRate = amountUsd > 0 ? Number(((netUsd * usdToCup) / amountUsd).toFixed(2)) : 0;
+        effectiveCupRate = amountUsd > 0 ? Number(((netUsd * baseUsdCup) / amountUsd).toFixed(2)) : 0;
       }
 
       return {

@@ -1,4 +1,4 @@
-export type CurrencyCode = 'USD' | 'EUR' | 'MLC' | 'ZELLE' | 'CAD' | 'MXN' | 'CLASICA' | 'CUP';
+export type CurrencyCode = 'USD' | 'EUR' | 'MLC' | 'USDT_TRC20' | 'ZELLE' | 'CAD' | 'MXN' | 'CLASICA' | 'CUP';
 
 export type CryptoSymbol = 'BTC' | 'ETH' | 'USDT' | 'SOL' | 'BNB' | 'TON';
 
