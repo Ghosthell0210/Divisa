@@ -1,0 +1,6 @@
+{
+  "name": "CambioCubano Bot & Console",
+  "description": "Bot de Telegram y consola financiera en tiempo real para tasas de El Toque (USD, EUR, MLC, CUP), criptomonedas líderes, calculadora de remesas y despliegue optimizado en Altare.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

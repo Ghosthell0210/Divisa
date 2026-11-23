@@ -1,0 +1,79 @@
+{
+  "manualModeEnabled": false,
+  "manualOverrides": {},
+  "gateways": [
+    {
+      "id": "binance-pay",
+      "name": "Binance Pay / USDT TRC20",
+      "method": "Cripto P2P",
+      "feePercent": 0.5,
+      "fixedFeeUsd": 1,
+      "spreadCup": 2,
+      "deliveryTime": "5 - 15 min",
+      "payoutCurrency": "CUP",
+      "enabled": true
+    },
+    {
+      "id": "zelle",
+      "name": "Zelle Directo",
+      "method": "Transferencia USD",
+      "feePercent": 2.5,
+      "fixedFeeUsd": 0,
+      "spreadCup": 5,
+      "deliveryTime": "15 - 45 min",
+      "payoutCurrency": "CUP",
+      "enabled": true
+    },
+    {
+      "id": "tropipay",
+      "name": "TropiPay",
+      "method": "Billetera EUR/USD",
+      "feePercent": 3.2,
+      "fixedFeeUsd": 1.5,
+      "spreadCup": 6,
+      "deliveryTime": "10 - 30 min",
+      "payoutCurrency": "CUP",
+      "enabled": true
+    },
+    {
+      "id": "bizum",
+      "name": "Bizum España",
+      "method": "EUR Instantáneo",
+      "feePercent": 3,
+      "fixedFeeUsd": 0,
+      "spreadCup": 8,
+      "deliveryTime": "20 - 60 min",
+      "payoutCurrency": "CUP",
+      "enabled": true
+    },
+    {
+      "id": "mlc-direct",
+      "name": "Recarga Tarjeta MLC",
+      "method": "Depósito Bancario",
+      "feePercent": 4.5,
+      "fixedFeeUsd": 2,
+      "spreadCup": 0,
+      "deliveryTime": "1 - 4 horas",
+      "payoutCurrency": "MLC",
+      "enabled": true
+    }
+  ],
+  "totalQueries": 1,
+  "seenUsers": [
+    "web-admin"
+  ],
+  "commandCounts": {
+    "/toque": 1
+  },
+  "recentLogs": [
+    {
+      "id": "1795405273813-30rof",
+      "timestamp": "2026-11-23T03:41:13.813Z",
+      "origin": "simulator",
+      "username": "Consola Web",
+      "command": "/toque",
+      "responsePreview": "Tasas de Cambio Cuba · Caché / Respaldo -------------------------------- USD     328,00 CUP  (+0.61%) EUR     345,00 CUP  (+0.29%) MLC     2",
+      "latencyMs": 71
+    }
+  ]
+}
