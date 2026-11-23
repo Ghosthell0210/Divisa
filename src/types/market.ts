@@ -2,15 +2,26 @@ export type CurrencyCode = 'USD' | 'EUR' | 'MLC' | 'ZELLE' | 'CAD' | 'MXN' | 'CL
 
 export type CryptoSymbol = 'BTC' | 'ETH' | 'USDT' | 'SOL' | 'BNB' | 'TON';
 
-export type DataSourceMode = 'live' | 'cached' | 'manual' | 'fallback';
+export type DataSourceMode =
+  | 'live'
+  | 'search-grounded'
+  | 'cached'
+  | 'stale'
+  | 'manual'
+  | 'unavailable';
 
 export type TimeRange = '24H' | '7D' | '30D';
+
+export interface SourceLink {
+  title: string;
+  uri: string;
+}
 
 export interface FiatRate {
   code: Exclude<CurrencyCode, 'CUP'>;
   name: string;
   rateToCup: number;
-  change24h: number;
+  change24h: number | null;
   source: DataSourceMode;
   manualOverride?: number | null;
   isManualActive?: boolean;
@@ -20,7 +31,7 @@ export interface CryptoAsset {
   symbol: CryptoSymbol;
   name: string;
   priceUsd: number;
-  priceCup: number;
+  priceCup: number | null;
   change24h: number;
   volume24hUsd: number;
   marketCapUsd: number;
@@ -41,10 +52,13 @@ export interface RemittanceGateway {
 
 export interface MarketSnapshot {
   updatedAt: string;
-  elToqueUpdatedAt: string;
-  cryptoUpdatedAt: string;
+  elToqueUpdatedAt: string | null;
+  cryptoUpdatedAt: string | null;
   elToqueSource: DataSourceMode;
   cryptoSource: DataSourceMode;
+  elToqueError?: string | null;
+  cryptoError?: string | null;
+  sourceUrls?: SourceLink[];
   fiatRates: FiatRate[];
   cryptoAssets: CryptoAsset[];
   cacheAgeSeconds: number;
@@ -55,6 +69,14 @@ export interface HistoricalPoint {
   timestamp: string;
   value: number;
   secondaryValue?: number;
+}
+
+export interface HistoricalSeriesResponse {
+  symbol: string;
+  range: TimeRange;
+  points: HistoricalPoint[];
+  source: DataSourceMode;
+  message?: string;
 }
 
 export interface BotCommandLog {

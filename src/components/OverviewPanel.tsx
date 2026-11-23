@@ -1,6 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { ArrowRightLeft, ArrowUpRight, ArrowDownRight, Sparkles, Send, TrendingUp } from 'lucide-react';
-import type { MarketSnapshot } from '../types/market';
+import {
+  ArrowRightLeft,
+  ArrowUpRight,
+  ArrowDownRight,
+  ExternalLink,
+  Sparkles,
+  Send,
+  TrendingUp,
+  AlertTriangle,
+} from 'lucide-react';
+import type { DataSourceMode, MarketSnapshot } from '../types/market';
 
 interface OverviewPanelProps {
   snapshot: MarketSnapshot | null;
@@ -8,27 +17,36 @@ interface OverviewPanelProps {
   onSelectAssetForChart: (symbol: string) => void;
 }
 
-const ALL_SYMBOLS = [
-  { code: 'USD', label: 'USD — Dólar EE.UU.' },
-  { code: 'EUR', label: 'EUR — Euro' },
-  { code: 'MLC', label: 'MLC — Moneda Libremente Convertible' },
-  { code: 'ZELLE', label: 'ZELLE — Saldo Zelle USD' },
-  { code: 'CLASICA', label: 'CLASICA — Tarjeta Clásica' },
-  { code: 'CAD', label: 'CAD — Dólar Canadiense' },
-  { code: 'MXN', label: 'MXN — Peso Mexicano' },
-  { code: 'CUP', label: 'CUP — Peso Cubano' },
-  { code: 'BTC', label: 'BTC — Bitcoin' },
-  { code: 'ETH', label: 'ETH — Ethereum' },
-  { code: 'USDT', label: 'USDT — Tether' },
-  { code: 'SOL', label: 'SOL — Solana' },
-  { code: 'BNB', label: 'BNB — BNB' },
-  { code: 'TON', label: 'TON — Toncoin' },
-];
+const SYMBOL_LABELS: Record<string, string> = {
+  USD: 'USD — Dólar EE.UU.',
+  EUR: 'EUR — Euro',
+  MLC: 'MLC — Moneda Libremente Convertible',
+  ZELLE: 'ZELLE — Saldo Zelle USD',
+  CLASICA: 'CLASICA — Tarjeta Clásica',
+  CAD: 'CAD — Dólar Canadiense',
+  MXN: 'MXN — Peso Mexicano',
+  CUP: 'CUP — Peso Cubano',
+  BTC: 'BTC — Bitcoin',
+  ETH: 'ETH — Ethereum',
+  USDT: 'USDT — Tether',
+  SOL: 'SOL — Solana',
+  BNB: 'BNB — BNB',
+  TON: 'TON — Toncoin',
+};
 
 function formatCompactUsd(val: number): string {
+  if (!val || val <= 0) return '—';
   if (val >= 1e9) return `$${(val / 1e9).toFixed(2)}B`;
   if (val >= 1e6) return `$${(val / 1e6).toFixed(1)}M`;
   return `$${val.toLocaleString('en-US')}`;
+}
+
+function sourceText(mode: DataSourceMode): string {
+  if (mode === 'live') return 'elTOQUE en vivo';
+  if (mode === 'search-grounded') return 'elTOQUE · Google Search';
+  if (mode === 'manual') return 'Manual';
+  if (mode === 'stale') return 'Último dato real';
+  return 'No disponible';
 }
 
 export const OverviewPanel: React.FC<OverviewPanelProps> = ({
@@ -45,33 +63,63 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState<boolean>(false);
 
+  const availableSymbols = useMemo(() => {
+    const list: string[] = [];
+    if (snapshot) {
+      for (const f of snapshot.fiatRates) list.push(f.code);
+      if (snapshot.fiatRates.length > 0) list.push('CUP');
+      for (const c of snapshot.cryptoAssets) list.push(c.symbol);
+    }
+    return list.length > 0 ? list : ['USD', 'CUP', 'BTC', 'USDT'];
+  }, [snapshot]);
+
   const conversion = useMemo(() => {
     if (!snapshot) return null;
     const amount = Number(amountStr.replace(',', '.'));
     if (!Number.isFinite(amount) || amount < 0) return null;
 
-    const usdRate = snapshot.fiatRates.find((f) => f.code === 'USD')?.rateToCup ?? 328;
+    const usdRate = snapshot.fiatRates.find((f) => f.code === 'USD')?.rateToCup ?? null;
 
-    const toCup = (sym: string): number => {
+    const toCup = (sym: string): number | null => {
       if (sym === 'CUP') return 1;
       const fiat = snapshot.fiatRates.find((f) => f.code === sym);
       if (fiat) return fiat.rateToCup;
       const crypto = snapshot.cryptoAssets.find((c) => c.symbol === sym);
-      if (crypto) return crypto.priceUsd * usdRate;
-      return 1;
+      if (crypto && usdRate) return crypto.priceUsd * usdRate;
+      return null;
     };
 
     const fromVal = toCup(fromCurrency);
     const toVal = toCup(toCurrency);
-    const totalCup = amount * fromVal;
-    const result = totalCup / toVal;
+    if (fromVal !== null && toVal !== null && toVal > 0) {
+      const totalCup = amount * fromVal;
+      return {
+        result: totalCup / toVal,
+        effectiveRate: fromVal / toVal,
+        totalCup,
+        totalUsd: usdRate ? totalCup / usdRate : null,
+      };
+    }
 
-    return {
-      result,
-      effectiveRate: fromVal / toVal,
-      totalCup,
-      totalUsd: totalCup / usdRate,
+    // Fallback to direct USD conversion when both are crypto/USD and El Toque CUP isn't available
+    const toUsdDirect = (sym: string): number | null => {
+      if (sym === 'USD') return 1;
+      const crypto = snapshot.cryptoAssets.find((c) => c.symbol === sym);
+      return crypto ? crypto.priceUsd : null;
     };
+    const fromUsd = toUsdDirect(fromCurrency);
+    const toUsd = toUsdDirect(toCurrency);
+    if (fromUsd !== null && toUsd !== null && toUsd > 0) {
+      const totalUsd = amount * fromUsd;
+      return {
+        result: totalUsd / toUsd,
+        effectiveRate: fromUsd / toUsd,
+        totalCup: null,
+        totalUsd,
+      };
+    }
+
+    return null;
   }, [snapshot, amountStr, fromCurrency, toCurrency]);
 
   const handleSwap = () => {
@@ -80,7 +128,7 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
   };
 
   const askAi = async (customPrompt?: string) => {
-    const q = (customPrompt ?? aiQuestion).trim() || 'Dame un resumen corto de las tasas de El Toque y Bitcoin hoy.';
+    const q = (customPrompt ?? aiQuestion).trim() || 'Dame un resumen corto de las tasas reales de El Toque y Bitcoin hoy.';
     setAiLoading(true);
     setAiError(null);
     try {
@@ -122,31 +170,31 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
   const kpis = [
     {
       symbol: 'USD',
-      title: 'Dólar (El Toque)',
-      value: usd ? `${usd.rateToCup.toFixed(2)} CUP` : '—',
-      change: usd?.change24h ?? 0,
-      meta: usd?.isManualActive ? 'Manual Verificada' : 'Mercado Informal',
+      title: 'Dólar (elTOQUE)',
+      value: usd ? `${usd.rateToCup.toFixed(2)} CUP` : 'Sin lectura',
+      change: usd?.change24h ?? null,
+      meta: snapshot ? sourceText(snapshot.elToqueSource) : '—',
     },
     {
       symbol: 'EUR',
-      title: 'Euro (El Toque)',
-      value: eur ? `${eur.rateToCup.toFixed(2)} CUP` : '—',
-      change: eur?.change24h ?? 0,
-      meta: eur?.isManualActive ? 'Manual Verificada' : 'Mercado Informal',
+      title: 'Euro (elTOQUE)',
+      value: eur ? `${eur.rateToCup.toFixed(2)} CUP` : 'Sin lectura',
+      change: eur?.change24h ?? null,
+      meta: snapshot ? sourceText(snapshot.elToqueSource) : '—',
     },
     {
       symbol: 'MLC',
       title: 'MLC Digital',
-      value: mlc ? `${mlc.rateToCup.toFixed(2)} CUP` : '—',
-      change: mlc?.change24h ?? 0,
-      meta: mlc?.isManualActive ? 'Manual Verificada' : 'Transferencia',
+      value: mlc ? `${mlc.rateToCup.toFixed(2)} CUP` : 'Sin lectura',
+      change: mlc?.change24h ?? null,
+      meta: snapshot ? sourceText(snapshot.elToqueSource) : '—',
     },
     {
       symbol: 'BTC',
       title: 'Bitcoin Spot',
-      value: btc ? `$${btc.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '—',
-      change: btc?.change24h ?? 0,
-      meta: btc ? `${Math.round(btc.priceCup).toLocaleString('es-ES')} CUP` : '—',
+      value: btc ? `$${btc.priceUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : 'Sin lectura',
+      change: btc?.change24h ?? null,
+      meta: btc && btc.priceCup !== null ? `${Math.round(btc.priceCup).toLocaleString('es-ES')} CUP` : 'Mercado Spot',
     },
   ];
 
@@ -155,7 +203,7 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
       {/* Top 4 KPI Strip */}
       <section aria-label="Indicadores principales" className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
         {kpis.map((item) => {
-          const isPositive = item.change >= 0;
+          const isPositive = (item.change ?? 0) >= 0;
           return (
             <button
               key={item.symbol}
@@ -172,15 +220,19 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
               </div>
               <div className="mt-3 flex items-center justify-between gap-2 text-xs">
                 <span className="text-slate-400 truncate">{item.meta}</span>
-                <span
-                  className={`inline-flex items-center gap-1 font-mono font-medium tabular-nums shrink-0 ${
-                    isPositive ? 'text-emerald-400' : 'text-rose-400'
-                  }`}
-                >
-                  {isPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
-                  {isPositive ? '+' : ''}
-                  {item.change.toFixed(2)}%
-                </span>
+                {item.change !== null ? (
+                  <span
+                    className={`inline-flex items-center gap-1 font-mono font-medium tabular-nums shrink-0 ${
+                      isPositive ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    {isPositive ? <ArrowUpRight className="w-3.5 h-3.5" /> : <ArrowDownRight className="w-3.5 h-3.5" />}
+                    {isPositive ? '+' : ''}
+                    {item.change.toFixed(2)}%
+                  </span>
+                ) : (
+                  <span className="font-mono text-slate-500 shrink-0">Real</span>
+                )}
               </div>
             </button>
           );
@@ -196,7 +248,7 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
               <div>
                 <h2 className="text-lg font-semibold text-slate-100">Conversor Rápido Divisas y Cripto</h2>
                 <p className="text-sm text-slate-400 mt-0.5">
-                  Cálculo instantáneo cruzado entre CUP, monedas de El Toque y criptomonedas.
+                  Calculado exclusivamente con las tasas reales vigentes en este momento.
                 </p>
               </div>
               <div className="hidden sm:flex items-center gap-1.5">
@@ -239,9 +291,9 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
                     onChange={(e) => setFromCurrency(e.target.value)}
                     className="w-full bg-[#0B1120] border border-slate-700 focus:border-sky-500 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none"
                   >
-                    {ALL_SYMBOLS.map((s) => (
-                      <option key={s.code} value={s.code}>
-                        {s.label}
+                    {availableSymbols.map((code) => (
+                      <option key={code} value={code}>
+                        {SYMBOL_LABELS[code] ?? code}
                       </option>
                     ))}
                   </select>
@@ -259,7 +311,7 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
 
               <div>
                 <label htmlFor="conv-to" className="block text-xs font-medium text-slate-400 mb-1.5">
-                  Resultado estimado
+                  Resultado real
                 </label>
                 <div className="flex flex-col gap-2">
                   <div className="w-full bg-[#0B1120] border border-slate-800 rounded-lg px-3.5 py-2.5 font-mono text-base font-semibold text-sky-400 tabular-nums truncate">
@@ -268,7 +320,7 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
                           minimumFractionDigits: conversion.result < 1 ? 6 : 2,
                           maximumFractionDigits: conversion.result < 1 ? 6 : 2,
                         })} ${toCurrency}`
-                      : '—'}
+                      : 'Sin tasa disponible'}
                   </div>
                   <select
                     id="conv-to"
@@ -276,9 +328,9 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
                     onChange={(e) => setToCurrency(e.target.value)}
                     className="w-full bg-[#0B1120] border border-slate-700 focus:border-sky-500 rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none"
                   >
-                    {ALL_SYMBOLS.map((s) => (
-                      <option key={s.code} value={s.code}>
-                        {s.label}
+                    {availableSymbols.map((code) => (
+                      <option key={code} value={code}>
+                        {SYMBOL_LABELS[code] ?? code}
                       </option>
                     ))}
                   </select>
@@ -301,13 +353,17 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
             <div>
               <span className="text-slate-400">Valor en CUP</span>
               <p className="mt-0.5 font-mono text-sm text-slate-200 tabular-nums">
-                {conversion ? `${Math.round(conversion.totalCup).toLocaleString('es-ES')} CUP` : '—'}
+                {conversion && conversion.totalCup !== null
+                  ? `${Math.round(conversion.totalCup).toLocaleString('es-ES')} CUP`
+                  : '—'}
               </p>
             </div>
             <div>
               <span className="text-slate-400">Valor en USD</span>
               <p className="mt-0.5 font-mono text-sm text-slate-200 tabular-nums">
-                {conversion ? `$${conversion.totalUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })} USD` : '—'}
+                {conversion && conversion.totalUsd !== null
+                  ? `$${conversion.totalUsd.toLocaleString('en-US', { maximumFractionDigits: 2 })} USD`
+                  : '—'}
               </p>
             </div>
           </div>
@@ -324,7 +380,7 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
               <span className="text-xs text-slate-400">Comando /ia</span>
             </div>
             <p className="text-sm text-slate-400 mt-1">
-              Consulta tendencias o interpreta el spread entre USD, MLC y criptomonedas en tiempo real.
+              Interpreta el spread real entre USD, MLC y criptomonedas usando únicamente las lecturas actuales.
             </p>
 
             <div className="mt-4 flex flex-wrap gap-2">
@@ -360,7 +416,7 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
                 <p className="whitespace-pre-line">{aiResponse}</p>
               ) : (
                 <p className="text-slate-500">
-                  Selecciona una consulta rápida o escribe tu pregunta cambiaria para obtener un diagnóstico basado en las cotizaciones activas.
+                  Selecciona una consulta rápida o escribe tu pregunta cambiaria para obtener un diagnóstico basado en las cotizaciones reales.
                 </p>
               )}
             </div>
@@ -395,59 +451,102 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
       {/* Dual High-Density Tables: El Toque Fiat & Crypto Spot */}
       <section className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Fiat Table */}
-        <div className="bg-[#111827] border border-slate-800 rounded-xl overflow-hidden">
-          <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4">
-            <div>
-              <h3 className="text-base font-semibold text-slate-100">Tasas Informales en Cuba (El Toque)</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Haz clic en una divisa para inspeccionar su gráfica histórica</p>
+        <div className="bg-[#111827] border border-slate-800 rounded-xl overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4">
+              <div>
+                <h3 className="text-base font-semibold text-slate-100">Tasas Informales en Cuba (elTOQUE)</h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  {snapshot?.elToqueUpdatedAt
+                    ? `Lectura real: ${new Date(snapshot.elToqueUpdatedAt).toLocaleString('es-ES')}`
+                    : 'Sin lectura real disponible'}
+                </p>
+              </div>
+              <span className="text-xs text-slate-400 whitespace-nowrap">
+                {snapshot ? sourceText(snapshot.elToqueSource) : '—'}
+              </span>
             </div>
-            <span className="text-xs text-slate-400 whitespace-nowrap">Base CUP</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 text-xs text-slate-400">
-                  <th className="py-3 px-6 font-medium">Divisa</th>
-                  <th className="py-3 px-4 font-medium text-right">Tasa CUP</th>
-                  <th className="py-3 px-4 font-medium text-right">Var. 24h</th>
-                  <th className="py-3 px-6 font-medium text-right">Origen</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/70 text-sm">
-                {snapshot?.fiatRates.map((rate) => {
-                  const up = rate.change24h >= 0;
-                  return (
-                    <tr
-                      key={rate.code}
-                      onClick={() => onSelectAssetForChart(rate.code)}
-                      className="hover:bg-slate-800/40 cursor-pointer transition-colors"
-                    >
-                      <td className="py-3 px-6">
-                        <div className="flex items-center gap-2.5">
-                          <span className="font-mono font-semibold text-slate-100">{rate.code}</span>
-                          <span className="text-slate-400 text-xs truncate max-w-[160px]">{rate.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-medium text-slate-100 tabular-nums">
-                        {rate.rateToCup.toFixed(2)} CUP
-                      </td>
-                      <td
-                        className={`py-3 px-4 text-right font-mono tabular-nums ${
-                          up ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
-                      >
-                        {up ? '+' : ''}
-                        {rate.change24h.toFixed(2)}%
-                      </td>
-                      <td className="py-3 px-6 text-right text-xs text-slate-400">
-                        {rate.isManualActive ? 'Manual' : rate.source === 'live' ? 'El Toque' : 'Respaldo'}
-                      </td>
+
+            {snapshot?.elToqueError && (
+              <div className="px-6 py-3 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2 text-xs text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0" />
+                <span>{snapshot.elToqueError}</span>
+              </div>
+            )}
+
+            {snapshot && snapshot.fiatRates.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="border-b border-slate-800 text-xs text-slate-400">
+                      <th className="py-3 px-6 font-medium">Divisa</th>
+                      <th className="py-3 px-4 font-medium text-right">Tasa CUP</th>
+                      <th className="py-3 px-4 font-medium text-right">Var. 24h</th>
+                      <th className="py-3 px-6 font-medium text-right">Fuente</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/70 text-sm">
+                    {snapshot.fiatRates.map((rate) => {
+                      const up = (rate.change24h ?? 0) >= 0;
+                      return (
+                        <tr
+                          key={rate.code}
+                          onClick={() => onSelectAssetForChart(rate.code)}
+                          className="hover:bg-slate-800/40 cursor-pointer transition-colors"
+                        >
+                          <td className="py-3 px-6">
+                            <div className="flex items-center gap-2.5">
+                              <span className="font-mono font-semibold text-slate-100">{rate.code}</span>
+                              <span className="text-slate-400 text-xs truncate max-w-[160px]">{rate.name}</span>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4 text-right font-mono font-medium text-slate-100 tabular-nums">
+                            {rate.rateToCup.toFixed(2)} CUP
+                          </td>
+                          <td
+                            className={`py-3 px-4 text-right font-mono tabular-nums ${
+                              rate.change24h === null
+                                ? 'text-slate-500'
+                                : up
+                                  ? 'text-emerald-400'
+                                  : 'text-rose-400'
+                            }`}
+                          >
+                            {rate.change24h === null ? '—' : `${up ? '+' : ''}${rate.change24h.toFixed(2)}%`}
+                          </td>
+                          <td className="py-3 px-6 text-right text-xs text-slate-400">
+                            {sourceText(rate.source)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-sm text-slate-400">
+                No se han recibido tasas reales de elTOQUE. Pulsa «Actualizar Tasas» para reintentar o configura <code className="text-slate-200">ELTOQUE_API_TOKEN</code>.
+              </div>
+            )}
           </div>
+
+          {snapshot?.sourceUrls && snapshot.sourceUrls.length > 0 && (
+            <div className="px-6 py-3 border-t border-slate-800 bg-[#0B1120] flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-400">
+              <span>Fuentes verificadas:</span>
+              {snapshot.sourceUrls.map((src) => (
+                <a
+                  key={src.uri}
+                  href={src.uri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-sky-400 hover:text-sky-300 truncate max-w-[220px]"
+                >
+                  <span className="truncate">{src.title}</span>
+                  <ExternalLink className="w-3 h-3 shrink-0" />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Crypto Table */}
@@ -455,7 +554,7 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
           <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4">
             <div>
               <h3 className="text-base font-semibold text-slate-100">Criptomonedas Principales en Vivo</h3>
-              <p className="text-xs text-slate-400 mt-0.5">Precios spot internacionales y su equivalente en Pesos Cubanos</p>
+              <p className="text-xs text-slate-400 mt-0.5">Precios reales vía CoinGecko / Binance y equivalente CUP</p>
             </div>
             <button
               type="button"
@@ -466,58 +565,72 @@ export const OverviewPanel: React.FC<OverviewPanelProps> = ({
               Ver gráficos
             </button>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-slate-800 text-xs text-slate-400">
-                  <th className="py-3 px-6 font-medium">Activo</th>
-                  <th className="py-3 px-4 font-medium text-right">Precio USD</th>
-                  <th className="py-3 px-4 font-medium text-right">En CUP</th>
-                  <th className="py-3 px-4 font-medium text-right">Var. 24h</th>
-                  <th className="py-3 px-6 font-medium text-right">Vol. 24h</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-800/70 text-sm">
-                {snapshot?.cryptoAssets.map((coin) => {
-                  const up = coin.change24h >= 0;
-                  return (
-                    <tr
-                      key={coin.symbol}
-                      onClick={() => onSelectAssetForChart(coin.symbol)}
-                      className="hover:bg-slate-800/40 cursor-pointer transition-colors"
-                    >
-                      <td className="py-3 px-6">
-                        <div className="flex items-center gap-2.5">
-                          <span className="font-mono font-semibold text-slate-100">{coin.symbol}</span>
-                          <span className="text-slate-400 text-xs">{coin.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono font-medium text-slate-100 tabular-nums">
-                        ${coin.priceUsd.toLocaleString('en-US', {
-                          minimumFractionDigits: coin.priceUsd < 10 ? 3 : 2,
-                          maximumFractionDigits: coin.priceUsd < 10 ? 3 : 2,
-                        })}
-                      </td>
-                      <td className="py-3 px-4 text-right font-mono text-slate-300 tabular-nums">
-                        {Math.round(coin.priceCup).toLocaleString('es-ES')}
-                      </td>
-                      <td
-                        className={`py-3 px-4 text-right font-mono tabular-nums ${
-                          up ? 'text-emerald-400' : 'text-rose-400'
-                        }`}
+
+          {snapshot?.cryptoError && (
+            <div className="px-6 py-3 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2 text-xs text-amber-300">
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+              <span>{snapshot.cryptoError}</span>
+            </div>
+          )}
+
+          {snapshot && snapshot.cryptoAssets.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-xs text-slate-400">
+                    <th className="py-3 px-6 font-medium">Activo</th>
+                    <th className="py-3 px-4 font-medium text-right">Precio USD</th>
+                    <th className="py-3 px-4 font-medium text-right">En CUP</th>
+                    <th className="py-3 px-4 font-medium text-right">Var. 24h</th>
+                    <th className="py-3 px-6 font-medium text-right">Vol. 24h</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800/70 text-sm">
+                  {snapshot.cryptoAssets.map((coin) => {
+                    const up = coin.change24h >= 0;
+                    return (
+                      <tr
+                        key={coin.symbol}
+                        onClick={() => onSelectAssetForChart(coin.symbol)}
+                        className="hover:bg-slate-800/40 cursor-pointer transition-colors"
                       >
-                        {up ? '+' : ''}
-                        {coin.change24h.toFixed(2)}%
-                      </td>
-                      <td className="py-3 px-6 text-right font-mono text-xs text-slate-400 tabular-nums">
-                        {formatCompactUsd(coin.volume24hUsd)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                        <td className="py-3 px-6">
+                          <div className="flex items-center gap-2.5">
+                            <span className="font-mono font-semibold text-slate-100">{coin.symbol}</span>
+                            <span className="text-slate-400 text-xs">{coin.name}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono font-medium text-slate-100 tabular-nums">
+                          ${coin.priceUsd.toLocaleString('en-US', {
+                            minimumFractionDigits: coin.priceUsd < 10 ? 4 : 2,
+                            maximumFractionDigits: coin.priceUsd < 10 ? 4 : 2,
+                          })}
+                        </td>
+                        <td className="py-3 px-4 text-right font-mono text-slate-300 tabular-nums">
+                          {coin.priceCup !== null ? Math.round(coin.priceCup).toLocaleString('es-ES') : '—'}
+                        </td>
+                        <td
+                          className={`py-3 px-4 text-right font-mono tabular-nums ${
+                            up ? 'text-emerald-400' : 'text-rose-400'
+                          }`}
+                        >
+                          {up ? '+' : ''}
+                          {coin.change24h.toFixed(2)}%
+                        </td>
+                        <td className="py-3 px-6 text-right font-mono text-xs text-slate-400 tabular-nums">
+                          {formatCompactUsd(coin.volume24hUsd)}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-8 text-center text-sm text-slate-400">
+              No hay precios cripto reales disponibles en este momento.
+            </div>
+          )}
         </div>
       </section>
     </div>

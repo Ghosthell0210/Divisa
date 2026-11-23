@@ -48,10 +48,12 @@ export default function App() {
     try {
       const res = await fetch(`/api/rates${force ? '?force=true' : ''}`);
       const data = (await res.json()) as MarketSnapshot & { error?: string };
-      if (!res.ok) {
-        throw new Error(data.error ?? 'Error cargando cotizaciones');
+      if (data && Array.isArray(data.fiatRates) && Array.isArray(data.cryptoAssets)) {
+        setSnapshot(data);
       }
-      setSnapshot(data);
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Error cargando cotizaciones reales');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudo conectar con la API de cotizaciones');
     } finally {
@@ -76,9 +78,29 @@ export default function App() {
 
   const activeNav = NAV_ITEMS.find((n) => n.id === activeTab) ?? NAV_ITEMS[0];
 
+  const fiatSourceLabel = !snapshot
+    ? '—'
+    : snapshot.elToqueSource === 'live'
+      ? 'En vivo'
+      : snapshot.elToqueSource === 'search-grounded'
+        ? 'Google Search'
+        : snapshot.elToqueSource === 'manual'
+          ? 'Manual'
+          : snapshot.elToqueSource === 'stale'
+            ? 'Último dato real'
+            : 'No disponible';
+
+  const cryptoSourceLabel = !snapshot
+    ? '—'
+    : snapshot.cryptoSource === 'live'
+      ? 'En vivo'
+      : snapshot.cryptoSource === 'stale'
+        ? 'Último dato real'
+        : 'No disponible';
+
   const sourceSummary = snapshot
-    ? `El Toque (${snapshot.elToqueSource === 'manual' ? 'Manual' : snapshot.elToqueSource === 'live' ? 'En vivo' : 'Respaldo'}) · Cripto (${snapshot.cryptoSource === 'live' ? 'En vivo' : 'Respaldo'}) · ${new Date(snapshot.updatedAt).toLocaleTimeString('es-ES')}`
-    : 'Sincronizando cotizaciones...';
+    ? `elTOQUE (${fiatSourceLabel}) · Cripto (${cryptoSourceLabel}) · ${new Date(snapshot.updatedAt).toLocaleTimeString('es-ES')}`
+    : 'Sincronizando cotizaciones reales...';
 
   return (
     <div className="min-h-screen bg-[#0B1120] text-slate-100 flex">

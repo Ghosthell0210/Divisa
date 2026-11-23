@@ -27,7 +27,6 @@ async function bootstrap(): Promise<void> {
   const app = express();
   app.use(express.json());
 
-  // Altare / Cloud Run Health Check Endpoint
   app.get('/api/health', (_req, res) => {
     const mem = process.memoryUsage();
     res.json({
@@ -39,30 +38,37 @@ async function bootstrap(): Promise<void> {
     });
   });
 
-  // Real-time unified market rates (El Toque + Crypto)
   app.get('/api/rates', async (req, res) => {
     try {
       const force = req.query.force === 'true';
       const snapshot = await getMarketSnapshot(force);
+      if (snapshot.fiatRates.length === 0 && snapshot.cryptoAssets.length === 0) {
+        res.status(503).json({
+          ...snapshot,
+          error:
+            snapshot.elToqueError ??
+            snapshot.cryptoError ??
+            'No hay fuentes de datos reales disponibles en este momento.',
+        });
+        return;
+      }
       res.json(snapshot);
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error obteniendo cotizaciones' });
     }
   });
 
-  // Historical chart data
   app.get('/api/history/:symbol', async (req, res) => {
     try {
       const rawRange = String(req.query.range ?? '24H').toUpperCase();
       const range: TimeRange = rawRange === '7D' || rawRange === '30D' ? rawRange : '24H';
       const series = await getHistoricalSeries(req.params.symbol, range);
-      res.json({ symbol: req.params.symbol.toUpperCase(), range, points: series });
+      res.json(series);
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error obteniendo históricos' });
     }
   });
 
-  // Cross-currency & crypto converter
   app.post('/api/convert', async (req, res) => {
     try {
       const amount = Number(req.body?.amount ?? 0);
@@ -70,7 +76,7 @@ async function bootstrap(): Promise<void> {
       const to = String(req.body?.to ?? 'CUP');
       const converted = await convertCurrencies(amount, from, to);
       if (!converted) {
-        res.status(400).json({ error: 'Par de monedas o monto inválido.' });
+        res.status(400).json({ error: 'No se pudo calcular la conversión con las tasas reales actuales.' });
         return;
       }
       res.json(converted);
@@ -79,7 +85,6 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  // Remittance gateways calculator
   app.post('/api/remittances', async (req, res) => {
     try {
       const amountUsd = Number(req.body?.amountUsd ?? 100);
@@ -87,14 +92,17 @@ async function bootstrap(): Promise<void> {
         res.status(400).json({ error: 'El monto debe ser mayor que 0.' });
         return;
       }
-      const quotes = await calculateRemittances(amountUsd);
-      res.json({ amountUsd, quotes });
+      const result = await calculateRemittances(amountUsd);
+      if (result.error) {
+        res.status(503).json({ error: result.error, quotes: [] });
+        return;
+      }
+      res.json({ amountUsd, quotes: result.quotes });
     } catch (err) {
       res.status(500).json({ error: err instanceof Error ? err.message : 'Error calculando remesas' });
     }
   });
 
-  // Telegram Bot Command Simulator (identical handler to real Telegram worker)
   app.post('/api/bot/simulate', async (req, res) => {
     try {
       const command = String(req.body?.command ?? '/start').trim();
@@ -113,12 +121,10 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  // Bot telemetry, logs & admin stats
   app.get('/api/bot/stats', (_req, res) => {
     res.json(getAdminStateSnapshot(getBotRuntimeStatus()));
   });
 
-  // Manual override rates management
   app.post('/api/admin/overrides', async (req, res) => {
     try {
       const manualModeEnabled = Boolean(req.body?.manualModeEnabled);
@@ -131,7 +137,6 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  // Remittance gateway config updates
   app.post('/api/admin/gateways', (req, res) => {
     try {
       const gateways = req.body?.gateways as RemittanceGateway[];
@@ -146,7 +151,6 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  // Server-side Gemini AI Market Brief
   app.post('/api/ai/analyze', async (req, res) => {
     try {
       const question = String(req.body?.question ?? '');
@@ -158,10 +162,8 @@ async function bootstrap(): Promise<void> {
     }
   });
 
-  // Initialize Telegram Bot (Polling or Webhook when TELEGRAM_BOT_TOKEN is set)
   initTelegramBot(app);
 
-  // Serve Vite middleware in dev OR static dist/ in production (Altare)
   const distDir = path.resolve(process.cwd(), 'dist');
   const distIndex = path.join(distDir, 'index.html');
   const isProd =

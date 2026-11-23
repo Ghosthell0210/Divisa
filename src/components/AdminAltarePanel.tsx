@@ -301,7 +301,7 @@ export const AdminAltarePanel: React.FC<AdminAltarePanelProps> = ({ snapshot, on
               onClick={() =>
                 copyText(
                   'env',
-                  'NODE_ENV=production\nPORT=3000\nTELEGRAM_BOT_TOKEN=\nWEBHOOK_URL=\nADMIN_CHAT_ID='
+                  'NODE_ENV=production\nPORT=3000\nTELEGRAM_BOT_TOKEN=\nELTOQUE_API_TOKEN=\nWEBHOOK_URL=\nADMIN_CHAT_ID='
                 )
               }
               className="inline-flex items-center gap-1 text-xs text-sky-400 hover:text-sky-300"
@@ -313,6 +313,7 @@ export const AdminAltarePanel: React.FC<AdminAltarePanelProps> = ({ snapshot, on
           <pre className="text-xs font-mono text-slate-300 overflow-x-auto leading-relaxed">{`NODE_ENV=production
 PORT=3000
 TELEGRAM_BOT_TOKEN=<token_de_botfather>
+ELTOQUE_API_TOKEN=<opcional_token_de_tasas_eltoque_com>
 WEBHOOK_URL=<opcional_si_prefieres_webhook_en_lugar_de_polling>
 ADMIN_CHAT_ID=<opcional_tu_id_telegram>`}</pre>
           <p className="mt-2 text-xs text-slate-400">

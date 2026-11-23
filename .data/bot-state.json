@@ -58,22 +58,131 @@
       "enabled": true
     }
   ],
-  "totalQueries": 1,
+  "totalQueries": 2,
   "seenUsers": [
     "web-admin"
   ],
   "commandCounts": {
-    "/toque": 1
+    "/toque": 1,
+    "/convertir": 1
   },
   "recentLogs": [
     {
-      "id": "1795405273813-30rof",
-      "timestamp": "2026-11-23T03:41:13.813Z",
+      "id": "1795406630789-rq0uf",
+      "timestamp": "2026-11-23T04:03:50.789Z",
+      "origin": "simulator",
+      "username": "Consola Web",
+      "command": "/convertir 100 USD CUP",
+      "responsePreview": "Conversión con Tasas Reales 100,00 USD = 96.000,00 CUP Tasa efectiva: 1 USD = 960,00 CUP Equivalente USD: $100,00 Equivalente CUP: 96.000 CU",
+      "latencyMs": 2
+    },
+    {
+      "id": "1795406630766-6mnm8",
+      "timestamp": "2026-11-23T04:03:50.766Z",
       "origin": "simulator",
       "username": "Consola Web",
       "command": "/toque",
-      "responsePreview": "Tasas de Cambio Cuba · Caché / Respaldo -------------------------------- USD     328,00 CUP  (+0.61%) EUR     345,00 CUP  (+0.29%) MLC     2",
-      "latencyMs": 71
+      "responsePreview": "Tasas de Cambio Cuba · elTOQUE (en vivo) -------------------------------- USD     960,00 CUP (+0.00%) EUR     1030,00 CUP (+0.00%) MLC     8",
+      "latencyMs": 7
     }
-  ]
+  ],
+  "fiatHistory": {
+    "USD": [
+      {
+        "timestamp": "2026-11-22T12:00:00.000Z",
+        "value": 960
+      }
+    ],
+    "EUR": [
+      {
+        "timestamp": "2026-11-22T12:00:00.000Z",
+        "value": 1030
+      }
+    ],
+    "MLC": [
+      {
+        "timestamp": "2026-11-22T12:00:00.000Z",
+        "value": 843.36
+      }
+    ]
+  },
+  "lastRealFiat": {
+    "fetchedAt": "2026-11-23T04:03:50.461Z",
+    "source": "live",
+    "sourceUrls": [
+      {
+        "title": "Canal Oficial elTOQUE",
+        "uri": "https://t.me/s/eltoquecom"
+      },
+      {
+        "title": "elTOQUE Tasas",
+        "uri": "https://eltoque.com/tasas-de-cambio-de-moneda-en-cuba-hoy"
+      }
+    ],
+    "rates": [
+      {
+        "code": "USD",
+        "rateToCup": 960,
+        "change24h": 0
+      },
+      {
+        "code": "EUR",
+        "rateToCup": 1030,
+        "change24h": 0
+      },
+      {
+        "code": "MLC",
+        "rateToCup": 840.66,
+        "change24h": -0.32
+      }
+    ]
+  },
+  "lastRealCrypto": {
+    "fetchedAt": "2026-11-23T04:03:50.672Z",
+    "source": "live",
+    "assets": [
+      {
+        "symbol": "BTC",
+        "priceUsd": 61155,
+        "change24h": 2.91,
+        "volume24hUsd": 28656181911,
+        "marketCapUsd": 1230198392441
+      },
+      {
+        "symbol": "ETH",
+        "priceUsd": 1728.93,
+        "change24h": 3.87,
+        "volume24hUsd": 8528599989,
+        "marketCapUsd": 211352882170
+      },
+      {
+        "symbol": "USDT",
+        "priceUsd": 0.998721,
+        "change24h": 0.03,
+        "volume24hUsd": 40110419078,
+        "marketCapUsd": 174614824046
+      },
+      {
+        "symbol": "SOL",
+        "priceUsd": 71.25,
+        "change24h": 2.35,
+        "volume24hUsd": 1918955447,
+        "marketCapUsd": 42178399043
+      },
+      {
+        "symbol": "BNB",
+        "priceUsd": 556.98,
+        "change24h": 2.77,
+        "volume24hUsd": 527306329,
+        "marketCapUsd": 73248956534
+      },
+      {
+        "symbol": "TON",
+        "priceUsd": 0.983423,
+        "change24h": 4.85,
+        "volume24hUsd": 28014647,
+        "marketCapUsd": 2827958808
+      }
+    ]
+  }
 }
